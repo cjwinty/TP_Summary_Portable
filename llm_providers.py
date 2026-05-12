@@ -10,8 +10,6 @@ ProviderType = Literal["local", "cloud"]
 LOCAL_PROVIDERS = {
     "Ollama": {"port": 11434, "endpoint_suffix": "/api/generate"},
     "LM Studio": {"port": 1234, "endpoint_suffix": "/v1/chat/completions"},
-    "LocalAI": {"port": 8080, "endpoint_suffix": "/v1/chat/completions"},
-    "vLLM": {"port": 8000, "endpoint_suffix": "/v1/chat/completions"},
 }
 
 CLOUD_PROVIDERS = {
@@ -75,8 +73,6 @@ class LocalLLMProvider(BaseLLMProvider):
         port_backends = {
             11434: "Ollama",
             1234: "LM Studio",
-            8080: "LocalAI",
-            8000: "vLLM",
         }
 
         if self._port in port_backends:

@@ -1,3 +1,7 @@
 .env
 tp_cache.db
 tp_query_error.log
+tp_cache.db-*
+user_config.json
+__pycache__/
+*.pyc

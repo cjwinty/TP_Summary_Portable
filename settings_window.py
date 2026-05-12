@@ -2,7 +2,7 @@ import customtkinter as ctk
 from tkinter import messagebox
 
 import config
-from config import set_ollama_model, set_llm_provider_type, set_cloud_config, set_local_provider, LLM_PROVIDER_TYPE, CLOUD_CONFIG
+from config import set_ollama_model, set_llm_provider_type, set_cloud_config, set_local_provider, set_local_host, LLM_PROVIDER_TYPE, CLOUD_CONFIG, LOCAL_LLM_HOST
 from database import (
     get_all_prompts, save_prompt, init_default_prompts,
     DEFAULT_PROMPTS,
@@ -92,15 +92,33 @@ class SettingsWindow(ctk.CTkToplevel):
         self.provider_dropdown.pack(side="left", padx=5)
         self.provider_dropdown.bind("<<ComboboxSelected>>", self.on_provider_selected)
 
+        # Host/IP entry for local providers
+        self.host_row = ctk.CTkFrame(card)
+        self.host_row.grid(row=3, column=0, padx=15, pady=(0, 10), sticky="w")
+
+        ctk.CTkLabel(self.host_row, text="Host/IP:").pack(side="left", padx=(0, 10))
+
+        self.host_var = ctk.StringVar(value=LOCAL_LLM_HOST)
+        self.host_entry = ctk.CTkEntry(self.host_row, textvariable=self.host_var, width=200)
+        self.host_entry.pack(side="left", padx=5)
+
+        self.port_label = ctk.CTkLabel(
+            self.host_row,
+            text="",
+            font=ctk.CTkFont(size=11),
+            text_color="gray"
+        )
+        self.port_label.pack(side="left", padx=(10, 0))
+
         self.model_var = ctk.StringVar(value=config.OLLAMA_MODEL)
         self.model_entry = ctk.CTkEntry(card, textvariable=self.model_var, width=250)
-        self.model_entry.grid(row=3, column=0, padx=15, pady=(0, 10), sticky="w")
+        self.model_entry.grid(row=4, column=0, padx=15, pady=(0, 10), sticky="w")
 
         self.save_model_btn = ctk.CTkButton(card, text="Save", command=self.save_model, width=80)
-        self.save_model_btn.grid(row=3, column=0, padx=(265, 5), pady=(0, 10), sticky="w")
+        self.save_model_btn.grid(row=4, column=0, padx=(265, 5), pady=(0, 10), sticky="w")
 
         self.test_model_btn = ctk.CTkButton(card, text="Test Connection", command=self.test_model, width=120)
-        self.test_model_btn.grid(row=3, column=0, padx=(355, 5), pady=(0, 10), sticky="w")
+        self.test_model_btn.grid(row=4, column=0, padx=(355, 5), pady=(0, 10), sticky="w")
 
         # Refresh models button
         self.refresh_models_btn = ctk.CTkButton(
@@ -109,7 +127,7 @@ class SettingsWindow(ctk.CTkToplevel):
             command=self.refresh_models,
             width=120
         )
-        self.refresh_models_btn.grid(row=3, column=0, padx=(480, 5), pady=(0, 10), sticky="w")
+        self.refresh_models_btn.grid(row=4, column=0, padx=(480, 5), pady=(0, 10), sticky="w")
 
         # Model dropdown for local providers
         self.model_dropdown = ctk.CTkComboBox(
@@ -118,11 +136,11 @@ class SettingsWindow(ctk.CTkToplevel):
             width=200,
             state="readonly"
         )
-        self.model_dropdown.grid(row=4, column=0, padx=15, pady=(0, 10), sticky="w")
+        self.model_dropdown.grid(row=5, column=0, padx=15, pady=(0, 10), sticky="w")
         self.model_dropdown.bind("<<ComboboxSelected>>", self.on_model_selected)
 
         cloud_row = ctk.CTkFrame(card)
-        cloud_row.grid(row=5, column=0, padx=15, pady=(0, 10), sticky="w")
+        cloud_row.grid(row=6, column=0, padx=15, pady=(0, 10), sticky="w")
         cloud_row.grid_columnconfigure((0, 1, 2), weight=1)
         cloud_row.grid_remove()
 
@@ -134,11 +152,11 @@ class SettingsWindow(ctk.CTkToplevel):
         ctk.CTkEntry(cloud_row, textvariable=self.cloud_model_var, width=100).grid(row=0, column=3, padx=5, sticky="w")
 
         self.model_status = ctk.CTkLabel(card, text="", text_color="gray", font=ctk.CTkFont(size=11))
-        self.model_status.grid(row=6, column=0, padx=15, pady=(0, 10), sticky="w")
+        self.model_status.grid(row=7, column=0, padx=15, pady=(0, 10), sticky="w")
 
         # Provider status display
         self.status_frame = ctk.CTkFrame(card, fg_color="transparent")
-        self.status_frame.grid(row=7, column=0, padx=15, pady=(5, 10), sticky="ew")
+        self.status_frame.grid(row=8, column=0, padx=15, pady=(5, 10), sticky="ew")
 
         self.provider_label = ctk.CTkLabel(
             self.status_frame,
@@ -176,10 +194,12 @@ class SettingsWindow(ctk.CTkToplevel):
     def update_provider_ui(self):
         if self.provider_var.get() == "cloud":
             self.cloud_row.grid()
+            self.host_row.grid_remove()
             self.model_entry.delete(0, "end")
             self.model_entry.insert(0, config._config.get("llm_cloud_model", "gpt-4"))
         else:
             self.cloud_row.grid_remove()
+            self.host_row.grid()
             self.model_entry.delete(0, "end")
             self.model_entry.insert(0, config._config.get("ollama_model") or "llama3.2")
         self.update_provider_dropdown()
@@ -191,6 +211,7 @@ class SettingsWindow(ctk.CTkToplevel):
         if self.provider_var.get() == "local":
             providers = list(LOCAL_PROVIDERS.keys())
             current = config._config.get("llm_local_provider", "Ollama")
+            self._update_port_label(current)
         else:
             providers = list(CLOUD_PROVIDERS.keys())
             current = config._config.get("llm_cloud_provider", "openai")
@@ -202,11 +223,23 @@ class SettingsWindow(ctk.CTkToplevel):
         elif providers:
             self.provider_dropdown.set(providers[0])
 
+    def _update_port_label(self, provider_name=None):
+        """Update the port hint label based on selected provider."""
+        from llm_providers import LOCAL_PROVIDERS
+        if provider_name is None:
+            provider_name = self.provider_dropdown.get()
+        port = LOCAL_PROVIDERS.get(provider_name, {}).get("port", "")
+        if port:
+            self.port_label.configure(text=f"(Port: {port})")
+        else:
+            self.port_label.configure(text="")
+
     def on_provider_selected(self, event=None):
         """Handle provider selection change."""
         selected = self.provider_dropdown.get()
         if self.provider_var.get() == "local":
             set_local_provider(selected)
+            self._update_port_label(selected)
             # Refresh models when local provider changes
             self.refresh_models()
         else:
@@ -265,13 +298,18 @@ class SettingsWindow(ctk.CTkToplevel):
             self.model_status.configure(text="Model refresh only for local providers", text_color="orange")
             return
 
+        host = self.host_var.get().strip()
+        if not host:
+            self.model_status.configure(text="Error: Host/IP cannot be empty", text_color="red")
+            return
+
         try:
             from llm_providers import LocalLLMProvider, LLMProviderError, LOCAL_PROVIDERS
             local_provider = self.provider_dropdown.get()
             port = LOCAL_PROVIDERS.get(local_provider, {}).get("port", 11434)
 
             config_obj = {
-                "host": "localhost",
+                "host": host,
                 "port": port,
                 "model": "",
                 "provider_name": local_provider,
@@ -465,11 +503,16 @@ class SettingsWindow(ctk.CTkToplevel):
             if not model:
                 self.model_status.configure(text="Error: Model required for local", text_color="red")
                 return
+            host = self.host_var.get().strip()
+            if not host:
+                self.model_status.configure(text="Error: Host/IP required for local", text_color="red")
+                return
             # Save local provider from dropdown
             local_provider = self.provider_dropdown.get()
             set_local_provider(local_provider)
+            set_local_host(host)
             set_ollama_model(model)
-            self.model_status.configure(text=f"Saved (Local) - Provider: {local_provider} | Model: {model}", text_color="green")
+            self.model_status.configure(text=f"Saved (Local) - Provider: {local_provider} | Host: {host} | Model: {model}", text_color="green")
 
         self.update_provider_ui()
         self.update_provider_status()
@@ -517,16 +560,21 @@ class SettingsWindow(ctk.CTkToplevel):
             else:
                 # Test local provider with CURRENT UI values
                 model = self.model_var.get().strip()
+                host = self.host_var.get().strip()
                 local_provider = self.provider_dropdown.get()
 
                 if not model:
                     self.model_status.configure(text="Error: Model required for local", text_color="red")
                     self.update_provider_status()
                     return
+                if not host:
+                    self.model_status.configure(text="Error: Host/IP required for local", text_color="red")
+                    self.update_provider_status()
+                    return
 
                 local_provider_config = LOCAL_PROVIDERS.get(local_provider, LOCAL_PROVIDERS["Ollama"])
                 local_config = {
-                    "host": "localhost",
+                    "host": host,
                     "port": local_provider_config["port"],
                     "model": model,
                     "timeout": 120,

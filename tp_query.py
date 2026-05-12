@@ -15,9 +15,11 @@ def _configure_bundled_tcl_tk():
     if not getattr(sys, "frozen", False) or not hasattr(sys, "_MEIPASS"):
         return
 
+    tcl_data = os.path.join(sys._MEIPASS, "_tcl_data")
+    tk_data = os.path.join(sys._MEIPASS, "_tk_data")
     tcl_root = os.path.join(sys._MEIPASS, "tcl")
-    tcl_library = os.path.join(tcl_root, "tcl8.6")
-    tk_library = os.path.join(tcl_root, "tk8.6")
+    tcl_library = tcl_data if os.path.exists(os.path.join(tcl_data, "init.tcl")) else os.path.join(tcl_root, "tcl8.6")
+    tk_library = tk_data if os.path.exists(os.path.join(tk_data, "tk.tcl")) else os.path.join(tcl_root, "tk8.6")
 
     if os.path.exists(os.path.join(tcl_library, "init.tcl")):
         os.environ["TCL_LIBRARY"] = tcl_library

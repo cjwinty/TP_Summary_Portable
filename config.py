@@ -101,6 +101,7 @@ OLLAMA_MODEL = _config.get("ollama_model") or os.getenv("OLLAMA_MODEL", "llama3.
 
 LLM_PROVIDER_TYPE = _config.get("llm_provider_type", "local")
 LOCAL_PROVIDER = _config.get("llm_local_provider", "Ollama")
+LOCAL_LLM_HOST = _config.get("llm_local_host", "localhost")
 
 CLOUD_CONFIG = {
     "provider": _config.get("llm_cloud_provider", "openai"),
@@ -128,6 +129,13 @@ def set_local_provider(provider_name: str):
     global LOCAL_PROVIDER
     _config["llm_local_provider"] = provider_name
     LOCAL_PROVIDER = provider_name
+    save_user_config(_config)
+
+
+def set_local_host(host: str):
+    global LOCAL_LLM_HOST
+    _config["llm_local_host"] = host
+    LOCAL_LLM_HOST = host
     save_user_config(_config)
 
 
@@ -176,7 +184,7 @@ def initialize_llm():
                 raise LLMProviderError("Local LLM selected but model not configured", "local")
             local_provider_config = LOCAL_PROVIDERS.get(local_provider, LOCAL_PROVIDERS["Ollama"])
             local_config = {
-                "host": "localhost",
+                "host": _config.get("llm_local_host", "localhost"),
                 "port": local_provider_config["port"],
                 "model": ollama_model,
                 "timeout": 120,
