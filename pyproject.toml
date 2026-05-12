@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "tp-query"
+version = "1.0.0"
+description = "TP Query — support ticket comment summariser using LLMs"
+requires-python = ">=3.8"
+dependencies = [
+    "customtkinter>=5.2.0",
+    "tkcalendar>=1.6.0",
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+    "certifi>=2024.0.0",
+]
+
+[project.gui-scripts]
+tp-query = "tp_query:main"
+
+[tool.setuptools.packages.find]
+include = ["tp_query", "base_app", "api", "config", "database", "analysis",
+           "llm_providers", "windows", "settings_window", "chain_window",
+           "prompt_chain_db", "prompt_chain_executor",
+           "CTkScrollableDropdown", "CTkScrollableDropdown.*"]
