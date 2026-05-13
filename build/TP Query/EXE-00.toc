@@ -76,11 +76,15 @@
    'E:\\TP Summary - '
    'Portable\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth_setuptools.py',
    'PYSOURCE'),
+  ('pyi_rth__tkinter',
+   'E:\\TP Summary - '
+   'Portable\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks\\pyi_rth__tkinter.py',
+   'PYSOURCE'),
   ('tp_query', 'E:\\TP Summary - Portable\\tp_query.py', 'PYSOURCE')],
  [],
  False,
  False,
- 1778599158,
+ 1778668152,
  [('runw.exe',
    'E:\\TP Summary - '
    'Portable\\.venv\\Lib\\site-packages\\PyInstaller\\bootloader\\Windows-64bit-intel\\runw.exe',
