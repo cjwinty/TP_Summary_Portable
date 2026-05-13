@@ -37,12 +37,12 @@ from prompt_chain_executor import execute_chain
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
-def _focus_window(win: ctk.CTkToplevel) -> None:
+def _focus_window(win: ctk.CTkToplevel, parent=None) -> None:
     """Bring a CTkToplevel to the front (project-standard pattern)."""
-    win.attributes("-topmost", True)
+    if parent:
+        win.transient(parent)
     win.lift()
     win.focus_force()
-    win.after(100, lambda: win.attributes("-topmost", False))
 
 
 # ── Main window ────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ class ChainWindow(ctk.CTkToplevel):
         self._build_ui()
         self._load_chain_list()
 
-        _focus_window(self)
+        _focus_window(self, parent=self.master)
         self.protocol("WM_DELETE_WINDOW", self.destroy)
 
     # ── UI construction ────────────────────────────────────────────

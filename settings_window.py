@@ -23,10 +23,9 @@ class SettingsWindow(ctk.CTkToplevel):
         
         self.setup_ui()
         
-        self.attributes('-topmost', True)
+        self.transient(self.master)
         self.lift()
         self.focus_force()
-        self.after(100, lambda: self.attributes('-topmost', False))
         
         self.protocol("WM_DELETE_WINDOW", self.close)
 

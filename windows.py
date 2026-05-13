@@ -68,10 +68,9 @@ class CommentsWindow(ctk.CTkToplevel):
         self.fetched_at = None
         self.current_id = None
 
-        self.attributes('-topmost', True)
+        self.transient(self.master)
         self.lift()
         self.focus_force()
-        self.after(100, lambda: self.attributes('-topmost', False))
 
     def on_search(self, event=None):
         query = self.search_var.get().strip()
@@ -176,10 +175,9 @@ class SummariesWindow(ctk.CTkToplevel):
 
         self._load_initial_page()
 
-        self.attributes('-topmost', True)
+        self.transient(self.master)
         self.lift()
         self.focus_force()
-        self.after(100, lambda: self.attributes('-topmost', False))
 
     def _load_initial_page(self):
         self.total_count = get_summary_count()
@@ -318,10 +316,9 @@ class SearchCacheWindow(ctk.CTkToplevel):
 
         self.setup_ui()
 
-        self.attributes('-topmost', True)
+        self.transient(self.master)
         self.lift()
         self.focus_force()
-        self.after(100, lambda: self.attributes('-topmost', False))
 
     def setup_ui(self):
         self.grid_columnconfigure(0, weight=1)
@@ -407,6 +404,8 @@ class SearchCacheWindow(ctk.CTkToplevel):
             top.title("Select Start Date")
             top.geometry("250x250")
             top.attributes('-topmost', True)
+            top.lift()
+            top.focus_force()
             cal = Calendar(top, date_pattern="yyyy-mm-dd", selectmode="day")
             cal.pack(fill="both", expand=True, padx=10, pady=10)
 
@@ -421,6 +420,8 @@ class SearchCacheWindow(ctk.CTkToplevel):
             top.title("Select End Date")
             top.geometry("250x250")
             top.attributes('-topmost', True)
+            top.lift()
+            top.focus_force()
             cal = Calendar(top, date_pattern="yyyy-mm-dd", selectmode="day")
             cal.pack(fill="both", expand=True, padx=10, pady=10)
 
