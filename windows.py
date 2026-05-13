@@ -172,6 +172,7 @@ class SummariesWindow(ctk.CTkToplevel):
         self.total_count = 0
         self.loaded_count = 0
         self.load_more_btn = None
+        self.no_results_label = None
 
         self._load_initial_page()
 
@@ -212,6 +213,9 @@ class SummariesWindow(ctk.CTkToplevel):
         if self.load_more_btn:
             self.load_more_btn.destroy()
             self.load_more_btn = None
+        if self.no_results_label:
+            self.no_results_label.destroy()
+            self.no_results_label = None
 
     def _update_load_more_btn(self):
         if self.load_more_btn:
@@ -246,7 +250,8 @@ class SummariesWindow(ctk.CTkToplevel):
         self.summaries = [{"id": s["id"], "created": s["created"]} for s in filtered]
         self.loaded_count = len(self.summaries)
         if not filtered:
-            ctk.CTkLabel(self.list_frame, text="No results found", text_color="gray").pack(pady=10)
+            self.no_results_label = ctk.CTkLabel(self.list_frame, text="No results found", text_color="gray")
+            self.no_results_label.pack(pady=10)
             return
         for i, s in enumerate(self.summaries):
             btn = ctk.CTkButton(
