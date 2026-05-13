@@ -444,6 +444,23 @@ def get_all_summaries():
     return [{"id": r[0], "summary": r[1], "created": r[2]} for r in rows]
 
 
+def get_summaries_page(limit=50, offset=0):
+    with _lock:
+        conn = _get_conn()
+        c = conn.cursor()
+        c.execute("SELECT request_id, created_at FROM summaries ORDER BY created_at DESC LIMIT ? OFFSET ?", (limit, offset))
+        rows = c.fetchall()
+    return [{"id": r[0], "created": r[1]} for r in rows]
+
+
+def get_summary_count():
+    with _lock:
+        conn = _get_conn()
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM summaries")
+        return c.fetchone()[0]
+
+
 def get_all_summaries_ids():
     with _lock:
         conn = _get_conn()

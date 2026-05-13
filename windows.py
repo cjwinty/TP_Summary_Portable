@@ -20,11 +20,12 @@ from analysis import (
 )
 from database import (
     get_cached_comments, get_all_summaries,
+    get_summaries_page, get_summary_count,
     search_cached_comments, search_summaries,
     search_and_fetch_full,
     get_all_custom_field_names as get_custom_field_names,
     get_custom_field_values,
-    delete_summary
+    delete_summary, get_summary
 )
 from CTkScrollableDropdown import CTkScrollableDropdown
 
@@ -124,6 +125,8 @@ class CommentsWindow(ctk.CTkToplevel):
 
 
 class SummariesWindow(ctk.CTkToplevel):
+    PAGE_SIZE = 50
+
     def __init__(self, parent):
         super().__init__(parent)
         self.title("Saved Summaries")
@@ -165,75 +168,135 @@ class SummariesWindow(ctk.CTkToplevel):
             hover_color="#a33"
         ).pack(side="right", padx=5)
 
-        self.selected_idx = None
+        self.selected_id = None
+        self.total_count = 0
+        self.loaded_count = 0
+        self.load_more_btn = None
 
-        self.load_summaries()
+        self._load_initial_page()
 
         self.attributes('-topmost', True)
         self.lift()
         self.focus_force()
         self.after(100, lambda: self.attributes('-topmost', False))
 
-    def load_summaries(self):
-        self.summaries = get_all_summaries()
-        self.display_summaries(self.summaries)
+    def _load_initial_page(self):
+        self.total_count = get_summary_count()
+        self.summaries = []
+        self._clear_list()
+        self._append_page(0)
 
-    def display_summaries(self, summary_list):
-        for btn in self.summary_buttons:
-            btn.destroy()
-        self.summary_buttons.clear()
-
-        if not summary_list:
-            ctk.CTkLabel(self.list_frame, text="No results found", text_color="gray").pack(pady=10)
+    def _append_page(self, offset):
+        page = get_summaries_page(limit=self.PAGE_SIZE, offset=offset)
+        if not page:
+            self._update_load_more_btn()
             return
-
-        for s in summary_list:
-            orig_idx = next(i for i, x in enumerate(self.summaries) if x['id'] == s['id'])
+        self.summaries.extend(page)
+        idx_start = len(self.summaries) - len(page)
+        for i, s in enumerate(page):
             btn = ctk.CTkButton(
                 self.list_frame,
                 text=f"#{s['id']} - {s['created'][:10]}",
-                command=lambda i=orig_idx: self.show_summary(i),
+                command=lambda idx=idx_start + i: self.show_summary(idx),
                 height=28
             )
             btn.pack(pady=2, padx=5, fill="x")
             self.summary_buttons.append(btn)
+        self.loaded_count = len(self.summaries)
+        self._update_load_more_btn()
+
+    def _clear_list(self):
+        for btn in self.summary_buttons:
+            btn.destroy()
+        self.summary_buttons.clear()
+        if self.load_more_btn:
+            self.load_more_btn.destroy()
+            self.load_more_btn = None
+
+    def _update_load_more_btn(self):
+        if self.load_more_btn:
+            self.load_more_btn.destroy()
+            self.load_more_btn = None
+        remaining = self.total_count - self.loaded_count
+        if remaining > 0:
+            self.load_more_btn = ctk.CTkButton(
+                self.list_frame,
+                text=f"Load More ({remaining} remaining)",
+                command=self._load_more,
+                height=32,
+                fg_color="#2a6",
+                hover_color="#184"
+            )
+            self.load_more_btn.pack(pady=4, padx=5, fill="x")
+
+    def _load_more(self):
+        if self.load_more_btn:
+            self.load_more_btn.configure(state="disabled", text="Loading...")
+        self._append_page(self.loaded_count)
 
     def search_by_id(self):
         search_id = self.search_var.get().strip()
         if not search_id:
-            self.load_summaries()
+            self._load_initial_page()
             return
-        filtered = [s for s in self.summaries if str(s['id']) == search_id]
-        self.display_summaries(filtered)
-        if filtered:
-            first_idx = next(i for i, x in enumerate(self.summaries) if x['id'] == filtered[0]['id'])
-            self.show_summary(first_idx)
+        from database import get_all_summaries
+        all_s = get_all_summaries()
+        filtered = [s for s in all_s if str(s['id']) == search_id]
+        self._clear_list()
+        self.summaries = [{"id": s["id"], "created": s["created"]} for s in filtered]
+        self.loaded_count = len(self.summaries)
+        if not filtered:
+            ctk.CTkLabel(self.list_frame, text="No results found", text_color="gray").pack(pady=10)
+            return
+        for i, s in enumerate(self.summaries):
+            btn = ctk.CTkButton(
+                self.list_frame,
+                text=f"#{s['id']} - {s['created'][:10]}",
+                command=lambda idx=i: self.show_summary(idx),
+                height=28
+            )
+            btn.pack(pady=2, padx=5, fill="x")
+            self.summary_buttons.append(btn)
+        self.show_summary(0)
 
     def clear_search(self):
         self.search_var.set("")
-        self.load_summaries()
+        self._load_initial_page()
 
     def show_summary(self, idx):
-        self.selected_idx = idx
-        if 0 <= idx < len(self.summaries):
-            summary = self.summaries[idx]
-            self.summary_text.delete("1.0", "end")
-            self.summary_text.insert(
-                "1.0",
-                f"Request #{summary['id']}\nCreated: {summary['created']}\n{'='*50}\n\n{summary['summary']}"
-            )
+        if idx >= len(self.summaries):
+            return
+        s = self.summaries[idx]
+        self.selected_id = s['id']
+        self.summary_text.delete("1.0", "end")
+        self.summary_text.insert("1.0", f"Request #{s['id']}\nCreated: {s['created']}\n{'='*50}\n\nLoading...")
+        self.update_idletasks()
+        text, created = get_summary(s['id'])
+        self.summary_text.delete("1.0", "end")
+        self.summary_text.insert(
+            "1.0",
+            f"Request #{s['id']}\nCreated: {created or s['created']}\n{'='*50}\n\n{text or '(empty)'}"
+        )
 
     def delete_selected_summary(self):
-        if self.selected_idx is None:
+        if self.selected_id is None:
             messagebox.showinfo("Delete", "No summary selected.", parent=self)
             return
-        summary = self.summaries[self.selected_idx]
-        if not messagebox.askyesno("Confirm Delete", "Delete this summary?", parent=self):
+        if not messagebox.askyesno("Confirm Delete", f"Delete summary #{self.selected_id}?", parent=self):
             return
-        delete_summary(summary['id'])
-        self.selected_idx = None
+        del_id = self.selected_id
+        delete_summary(del_id)
+        self.selected_id = None
         self.summary_text.delete("1.0", "end")
-        self.load_summaries()
+        for i, s in enumerate(self.summaries):
+            if s['id'] == del_id:
+                self.summary_buttons[i].destroy()
+                del self.summary_buttons[i]
+                del self.summaries[i]
+                self.total_count -= 1
+                self.loaded_count -= 1
+                break
+        self._update_load_more_btn()
 
 
 class SearchCacheWindow(ctk.CTkToplevel):
