@@ -1,8 +1,10 @@
 import logging
 import requests
 import threading
+from datetime import datetime
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, Literal
+import config
 
 ProviderType = Literal["local", "cloud"]
 
@@ -314,6 +316,18 @@ class LLMClient:
                 )
 
             logger.info(f"Generating with provider type: {cls._provider.provider_type}, model: {cls._provider.model}")
+
+            if config.PROMPT_LOGGING_ENABLED:
+                try:
+                    with open(config.PROMPT_LOG_FILE, "a", encoding="utf-8") as f:
+                        f.write(f"\n{'='*60}\n")
+                        f.write(f"[{datetime.now().isoformat()}] PROMPT SENT TO LLM\n")
+                        f.write(f"{'='*60}\n")
+                        f.write(prompt)
+                        f.write(f"\n{'='*60}\n\n")
+                except Exception:
+                    logger.exception("Failed to write prompt log")
+
             return cls._provider.generate(prompt, **kwargs)
 
     @classmethod

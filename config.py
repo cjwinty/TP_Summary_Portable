@@ -110,6 +110,9 @@ CLOUD_CONFIG = {
     "model": _config.get("llm_cloud_model", "gpt-4"),
 }
 
+PROMPT_LOG_FILE = os.path.join(get_base_dir(), "tp_prompt_log.txt")
+PROMPT_LOGGING_ENABLED = _config.get("prompt_logging_enabled", False)
+
 
 def set_ollama_model(model_name):
     global OLLAMA_MODEL
@@ -153,6 +156,13 @@ def set_cloud_config(provider: str, endpoint: str, api_key: str, model: str):
         "api_key": _secure_config.get("llm_api_key", ""),
         "model": model,
     }
+
+
+def set_prompt_logging_enabled(enabled: bool):
+    global PROMPT_LOGGING_ENABLED
+    PROMPT_LOGGING_ENABLED = enabled
+    _config["prompt_logging_enabled"] = enabled
+    save_user_config(_config)
 
 
 def initialize_llm():

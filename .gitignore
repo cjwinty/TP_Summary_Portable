@@ -5,3 +5,4 @@ tp_cache.db-*
 user_config.json
 __pycache__/
 *.pyc
+tp_prompt_log.txt

@@ -187,9 +187,25 @@ class SettingsWindow(ctk.CTkToplevel):
         )
         self.model_display_label.pack(fill="x")
 
+        self.prompt_log_var = ctk.BooleanVar(value=config.PROMPT_LOGGING_ENABLED)
+        self.prompt_log_checkbox = ctk.CTkCheckBox(
+            card,
+            text="Log prompts to tp_prompt_log.txt",
+            variable=self.prompt_log_var,
+            command=self._on_prompt_log_toggle
+        )
+        self.prompt_log_checkbox.grid(row=9, column=0, padx=15, pady=(5, 15), sticky="w")
+
         self.cloud_row = cloud_row
         self.update_provider_ui()
         self.update_provider_status()
+
+    def _on_prompt_log_toggle(self):
+        config.set_prompt_logging_enabled(self.prompt_log_var.get())
+        self.model_status.configure(
+            text=f"Prompt logging {'enabled' if self.prompt_log_var.get() else 'disabled'}",
+            text_color="gray"
+        )
 
     def on_provider_changed(self):
         self.update_provider_ui()
