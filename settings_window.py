@@ -76,11 +76,12 @@ class SettingsWindow(ctk.CTkToplevel):
         ctk.CTkRadioButton(provider_row, text="Local", variable=self.provider_var, value="local", command=self.on_provider_changed).pack(side="left", padx=5)
         ctk.CTkRadioButton(provider_row, text="Cloud", variable=self.provider_var, value="cloud", command=self.on_provider_changed).pack(side="left", padx=5)
 
-        # Provider selection dropdown
+        # Provider selection: dropdown for local, URL entry for cloud
         self.provider_select_row = ctk.CTkFrame(card)
-        self.provider_select_row.grid(row=2, column=0, padx=15, pady=(0, 10), sticky="w")
+        self.provider_select_row.grid(row=2, column=0, padx=15, pady=(0, 10), sticky="ew")
+        self.provider_select_row.grid_columnconfigure(1, weight=1)
 
-        ctk.CTkLabel(self.provider_select_row, text="Provider:").pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(self.provider_select_row, text="Provider:").grid(row=0, column=0, padx=(0, 10), sticky="w")
 
         self.provider_dropdown = ctk.CTkComboBox(
             self.provider_select_row,
@@ -88,8 +89,12 @@ class SettingsWindow(ctk.CTkToplevel):
             width=200,
             state="readonly"
         )
-        self.provider_dropdown.pack(side="left", padx=5)
+        self.provider_dropdown.grid(row=0, column=1, sticky="w")
         self.provider_dropdown.bind("<<ComboboxSelected>>", self.on_provider_selected)
+
+        self.cloud_endpoint_var = ctk.StringVar(value=CLOUD_CONFIG.get("endpoint", "https://api.openai.com/v1/chat/completions"))
+        self.cloud_endpoint_entry = ctk.CTkEntry(self.provider_select_row, textvariable=self.cloud_endpoint_var)
+        self.cloud_endpoint_entry.grid(row=0, column=1, sticky="ew", padx=0)
 
         # Host/IP entry for local providers
         self.host_row = ctk.CTkFrame(card)
@@ -194,29 +199,29 @@ class SettingsWindow(ctk.CTkToplevel):
         if self.provider_var.get() == "cloud":
             self.cloud_row.grid()
             self.host_row.grid_remove()
+            self.provider_dropdown.grid_remove()
+            self.cloud_endpoint_entry.grid()
             self.model_entry.delete(0, "end")
             self.model_entry.insert(0, config._config.get("llm_cloud_model", "gpt-4"))
         else:
             self.cloud_row.grid_remove()
             self.host_row.grid()
+            self.cloud_endpoint_entry.grid_remove()
+            self.provider_dropdown.grid()
             self.model_entry.delete(0, "end")
             self.model_entry.insert(0, config._config.get("ollama_model") or "llama3.2")
         self.update_provider_dropdown()
 
     def update_provider_dropdown(self):
-        """Update provider dropdown based on selected mode (local/cloud)."""
-        from llm_providers import LOCAL_PROVIDERS, CLOUD_PROVIDERS
-
-        if self.provider_var.get() == "local":
-            providers = list(LOCAL_PROVIDERS.keys())
-            current = config._config.get("llm_local_provider", "Ollama")
-            self._update_port_label(current)
-        else:
-            providers = list(CLOUD_PROVIDERS.keys())
-            current = config._config.get("llm_cloud_provider", "openai")
+        """Update provider dropdown (local mode only)."""
+        if self.provider_var.get() == "cloud":
+            return
+        from llm_providers import LOCAL_PROVIDERS
+        providers = list(LOCAL_PROVIDERS.keys())
+        current = config._config.get("llm_local_provider", "Ollama")
+        self._update_port_label(current)
 
         self.provider_dropdown.configure(values=providers)
-
         if current in providers:
             self.provider_dropdown.set(current)
         elif providers:
@@ -234,19 +239,11 @@ class SettingsWindow(ctk.CTkToplevel):
             self.port_label.configure(text="")
 
     def on_provider_selected(self, event=None):
-        """Handle provider selection change."""
+        """Handle local provider selection change."""
         selected = self.provider_dropdown.get()
-        if self.provider_var.get() == "local":
-            set_local_provider(selected)
-            self._update_port_label(selected)
-            # Refresh models when local provider changes
-            self.refresh_models()
-        else:
-            # Update cloud provider in config
-            from config import _config, save_user_config
-            _config["llm_cloud_provider"] = selected
-            save_user_config(_config)
-
+        set_local_provider(selected)
+        self._update_port_label(selected)
+        self.refresh_models()
         self.update_provider_status()
 
     def update_provider_status(self):
@@ -482,21 +479,18 @@ class SettingsWindow(ctk.CTkToplevel):
         if provider_type == "cloud":
             api_key = self.cloud_api_key_var.get().strip()
             model = self.cloud_model_var.get().strip()
+            endpoint = self.cloud_endpoint_var.get().strip()
+            if not endpoint:
+                self.model_status.configure(text="Error: API Endpoint URL required for cloud", text_color="red")
+                return
             if not api_key:
                 self.model_status.configure(text="Error: API key required for cloud", text_color="red")
                 return
             if not model:
                 self.model_status.configure(text="Error: Model required for cloud", text_color="red")
                 return
-            # Save cloud provider from dropdown
-            cloud_provider = self.provider_dropdown.get()
-            set_cloud_config(
-                cloud_provider,
-                config._config.get("llm_cloud_endpoint", "https://api.openai.com/v1/chat/completions"),
-                api_key,
-                model
-            )
-            self.model_status.configure(text=f"Saved (Cloud) - Provider: {cloud_provider} | Model: {model}", text_color="green")
+            set_cloud_config("openai", endpoint, api_key, model)
+            self.model_status.configure(text=f"Saved (Cloud) - Endpoint: {endpoint} | Model: {model}", text_color="green")
         else:
             model = self.model_var.get().strip()
             if not model:
@@ -532,14 +526,18 @@ class SettingsWindow(ctk.CTkToplevel):
         self.model_status.configure(text="Testing...", text_color="gray")
 
         try:
-            from llm_providers import LLMClient, LocalLLMProvider, CloudLLMProvider, LLMProviderError, LOCAL_PROVIDERS, CLOUD_PROVIDERS
+            from llm_providers import LLMClient, LocalLLMProvider, CloudLLMProvider, LLMProviderError, LOCAL_PROVIDERS
 
             if provider_type == "cloud":
                 # Test cloud provider with CURRENT UI values
                 api_key = self.cloud_api_key_var.get().strip()
                 model = self.cloud_model_var.get().strip()
-                cloud_provider = self.provider_dropdown.get()
+                endpoint = self.cloud_endpoint_var.get().strip()
 
+                if not endpoint:
+                    self.model_status.configure(text="Error: API Endpoint URL required for cloud", text_color="red")
+                    self.update_provider_status()
+                    return
                 if not api_key:
                     self.model_status.configure(text="Error: API key required for cloud", text_color="red")
                     self.update_provider_status()
@@ -550,8 +548,8 @@ class SettingsWindow(ctk.CTkToplevel):
                     return
 
                 cloud_config = {
-                    "provider": cloud_provider,
-                    "endpoint": CLOUD_PROVIDERS.get(cloud_provider, {}).get("endpoint", "https://api.openai.com/v1/chat/completions"),
+                    "provider": "openai",
+                    "endpoint": endpoint,
                     "api_key": api_key,
                     "model": model,
                 }
