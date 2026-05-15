@@ -107,6 +107,7 @@ CLOUD_CONFIG = {
     "provider": _config.get("llm_cloud_provider", "openai"),
     "endpoint": _config.get("llm_cloud_endpoint", "https://api.openai.com/v1/chat/completions"),
     "api_key": _secure_config.get("llm_api_key", ""),
+    "aws_region": _config.get("llm_aws_region", "us-east-1"),
     "model": _config.get("llm_cloud_model", "gpt-4"),
 }
 
@@ -159,6 +160,22 @@ def set_cloud_config(provider: str, endpoint: str, api_key: str, model: str):
     })
 
 
+def set_bedrock_config(region: str, api_key: str, model: str):
+    _config["llm_cloud_provider"] = "bedrock"
+    _config["llm_aws_region"] = region
+    _config["llm_cloud_model"] = model
+    save_user_config(_config)
+    _secure_config["llm_bedrock_api_key"] = api_key
+    save_secure_config(_secure_config)
+    CLOUD_CONFIG.update({
+        "provider": "bedrock",
+        "aws_region": region,
+        "model": model,
+        "endpoint": "",
+        "api_key": _secure_config.get("llm_bedrock_api_key", ""),
+    })
+
+
 def set_prompt_logging_enabled(enabled: bool):
     global PROMPT_LOGGING_ENABLED
     PROMPT_LOGGING_ENABLED = enabled
@@ -182,18 +199,30 @@ def initialize_llm():
     # Use lock to prevent race condition
     with _llm_lock:
         if llm_provider_type == "cloud":
-            # Build cloud_config from current _config values
-            cloud_config = {
-                "provider": _config.get("llm_cloud_provider", "openai"),
-                "endpoint": _config.get("llm_cloud_endpoint", "https://api.openai.com/v1/chat/completions"),
-                "api_key": _secure_config.get("llm_api_key", ""),
-                "model": _config.get("llm_cloud_model", "gpt-4"),
-                "verify": VERIFY_SSL,
-            }
-            if not cloud_config.get("api_key"):
-                raise LLMProviderError("Cloud LLM selected but API key not configured", "cloud")
-            provider = CloudLLMProvider(cloud_config)
-            logger.info(f"Using cloud LLM: {cloud_config.get('provider')}")
+            provider_name = _config.get("llm_cloud_provider", "openai")
+            if provider_name == "bedrock":
+                cloud_config = {
+                    "provider": "bedrock",
+                    "api_key": _secure_config.get("llm_bedrock_api_key", ""),
+                    "aws_region": _config.get("llm_aws_region", "us-east-1"),
+                    "model": _config.get("llm_cloud_model", "gpt-4"),
+                }
+                if not cloud_config.get("api_key"):
+                    raise LLMProviderError("Bedrock API key not configured", "cloud")
+                provider = CloudLLMProvider(cloud_config)
+                logger.info("Using cloud LLM: AWS Bedrock")
+            else:
+                cloud_config = {
+                    "provider": provider_name,
+                    "endpoint": _config.get("llm_cloud_endpoint", "https://api.openai.com/v1/chat/completions"),
+                    "api_key": _secure_config.get("llm_api_key", ""),
+                    "model": _config.get("llm_cloud_model", "gpt-4"),
+                    "verify": VERIFY_SSL,
+                }
+                if not cloud_config.get("api_key"):
+                    raise LLMProviderError("Cloud LLM selected but API key not configured", "cloud")
+                provider = CloudLLMProvider(cloud_config)
+                logger.info(f"Using cloud LLM: {provider_name}")
         else:
             # Read current values from _config
             ollama_model = _config.get("ollama_model") or os.getenv("OLLAMA_MODEL", "llama3.2")
@@ -235,8 +264,15 @@ def validate_llm_config():
 
     if llm_provider_type == "cloud":
         errors = []
-        if not _secure_config.get("llm_api_key"):
-            errors.append("API key not configured")
+        provider_name = _config.get("llm_cloud_provider", "openai")
+        if provider_name == "bedrock":
+            if not _secure_config.get("llm_bedrock_api_key"):
+                errors.append("Bedrock API key not configured")
+            if not _config.get("llm_aws_region"):
+                errors.append("AWS region not configured")
+        else:
+            if not _secure_config.get("llm_api_key"):
+                errors.append("API key not configured")
         if not _config.get("llm_cloud_model"):
             errors.append("Model not configured")
         return len(errors) == 0, errors

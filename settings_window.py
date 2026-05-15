@@ -3,7 +3,7 @@ from tkinter import messagebox
 from threading import Thread
 
 import config
-from config import set_ollama_model, set_llm_provider_type, set_cloud_config, set_local_provider, set_local_host, LLM_PROVIDER_TYPE, CLOUD_CONFIG, LOCAL_LLM_HOST
+from config import set_ollama_model, set_llm_provider_type, set_cloud_config, set_bedrock_config, set_local_provider, set_local_host, LLM_PROVIDER_TYPE, CLOUD_CONFIG, LOCAL_LLM_HOST
 from database import (
     get_all_prompts, save_prompt, init_default_prompts,
     DEFAULT_PROMPTS,
@@ -77,12 +77,13 @@ class SettingsWindow(ctk.CTkToplevel):
         ctk.CTkRadioButton(provider_row, text="Local", variable=self.provider_var, value="local", command=self.on_provider_changed).pack(side="left", padx=5)
         ctk.CTkRadioButton(provider_row, text="Cloud", variable=self.provider_var, value="cloud", command=self.on_provider_changed).pack(side="left", padx=5)
 
-        # Provider selection: dropdown for local, URL entry for cloud
+        # Row 2: Provider dropdown (local) or Cloud Type dropdown (cloud)
         self.provider_select_row = ctk.CTkFrame(card)
         self.provider_select_row.grid(row=2, column=0, padx=15, pady=(0, 10), sticky="ew")
         self.provider_select_row.grid_columnconfigure(1, weight=1)
 
-        ctk.CTkLabel(self.provider_select_row, text="Provider:").grid(row=0, column=0, padx=(0, 10), sticky="w")
+        self.provider_select_label = ctk.CTkLabel(self.provider_select_row, text="Provider:")
+        self.provider_select_label.grid(row=0, column=0, padx=(0, 10), sticky="w")
 
         self.provider_dropdown = ctk.CTkComboBox(
             self.provider_select_row,
@@ -93,9 +94,15 @@ class SettingsWindow(ctk.CTkToplevel):
         self.provider_dropdown.grid(row=0, column=1, sticky="w")
         self.provider_dropdown.bind("<<ComboboxSelected>>", self.on_provider_selected)
 
-        self.cloud_endpoint_var = ctk.StringVar(value=CLOUD_CONFIG.get("endpoint", "https://api.openai.com/v1/chat/completions"))
-        self.cloud_endpoint_entry = ctk.CTkEntry(self.provider_select_row, textvariable=self.cloud_endpoint_var)
-        self.cloud_endpoint_entry.grid(row=0, column=1, sticky="ew", padx=0)
+        self.cloud_type_var = ctk.StringVar(value="openai")
+        self.cloud_type_dropdown = ctk.CTkComboBox(
+            self.provider_select_row,
+            values=["OpenAI Compatible", "AWS Bedrock"],
+            width=200,
+            state="readonly",
+            command=self.on_cloud_type_changed
+        )
+        self.cloud_type_dropdown.grid(row=0, column=1, sticky="w")
 
         # Host/IP entry for local providers
         self.host_row = ctk.CTkFrame(card)
@@ -129,17 +136,38 @@ class SettingsWindow(ctk.CTkToplevel):
         )
         self.model_dropdown.grid(row=5, column=0, padx=15, pady=(0, 10), sticky="w")
 
-        cloud_row = ctk.CTkFrame(card)
-        cloud_row.grid(row=6, column=0, padx=15, pady=(0, 10), sticky="w")
-        cloud_row.grid_columnconfigure((0, 1, 2), weight=1)
-        cloud_row.grid_remove()
+        # Cloud OpenAI config row (row 6, initially hidden)
+        self.cloud_openai_row = ctk.CTkFrame(card)
+        self.cloud_openai_row.grid(row=6, column=0, padx=15, pady=(0, 10), sticky="ew")
+        self.cloud_openai_row.grid_columnconfigure(1, weight=1)
+        self.cloud_openai_row.grid_remove()
 
-        ctk.CTkLabel(cloud_row, text="API Key:").grid(row=0, column=0, padx=(0, 5), sticky="w")
+        ctk.CTkLabel(self.cloud_openai_row, text="API Endpoint:").grid(row=0, column=0, sticky="w", pady=(0, 5))
+        self.cloud_endpoint_var = ctk.StringVar(value=CLOUD_CONFIG.get("endpoint", "https://api.openai.com/v1/chat/completions"))
+        ctk.CTkEntry(self.cloud_openai_row, textvariable=self.cloud_endpoint_var).grid(row=0, column=1, sticky="ew", padx=(5, 0), pady=(0, 5))
+
+        ctk.CTkLabel(self.cloud_openai_row, text="API Key:").grid(row=1, column=0, sticky="w")
         self.cloud_api_key_var = ctk.StringVar(value=CLOUD_CONFIG.get("api_key", ""))
-        ctk.CTkEntry(cloud_row, textvariable=self.cloud_api_key_var, width=250, show="*").grid(row=0, column=1, padx=5, sticky="w")
-        ctk.CTkLabel(cloud_row, text="Model:").grid(row=0, column=2, padx=(10, 5), sticky="w")
+        ctk.CTkEntry(self.cloud_openai_row, textvariable=self.cloud_api_key_var, show="*").grid(row=1, column=1, sticky="ew", padx=(5, 10))
+        ctk.CTkLabel(self.cloud_openai_row, text="Model:").grid(row=1, column=2, sticky="w", padx=(0, 5))
         self.cloud_model_var = ctk.StringVar(value=CLOUD_CONFIG.get("model", "gpt-4"))
-        ctk.CTkEntry(cloud_row, textvariable=self.cloud_model_var, width=100).grid(row=0, column=3, padx=5, sticky="w")
+        ctk.CTkEntry(self.cloud_openai_row, textvariable=self.cloud_model_var, width=200).grid(row=1, column=3, sticky="w")
+
+        # Cloud Bedrock config row (row 6, initially hidden)
+        self.cloud_bedrock_row = ctk.CTkFrame(card)
+        self.cloud_bedrock_row.grid(row=6, column=0, padx=15, pady=(0, 10), sticky="ew")
+        self.cloud_bedrock_row.grid_columnconfigure(1, weight=1)
+        self.cloud_bedrock_row.grid_remove()
+
+        ctk.CTkLabel(self.cloud_bedrock_row, text="Region:").grid(row=0, column=0, sticky="w", pady=(0, 5))
+        self.aws_region_var = ctk.StringVar(value=CLOUD_CONFIG.get("aws_region", "us-east-1"))
+        ctk.CTkEntry(self.cloud_bedrock_row, textvariable=self.aws_region_var, width=160).grid(row=0, column=1, sticky="w", padx=(5, 10), pady=(0, 5))
+        ctk.CTkLabel(self.cloud_bedrock_row, text="API Key:").grid(row=0, column=2, sticky="w", pady=(0, 5))
+        self.bedrock_api_key_var = ctk.StringVar(value=CLOUD_CONFIG.get("api_key", ""))
+        ctk.CTkEntry(self.cloud_bedrock_row, textvariable=self.bedrock_api_key_var, show="*", width=300).grid(row=0, column=3, sticky="w", pady=(0, 5))
+
+        ctk.CTkLabel(self.cloud_bedrock_row, text="Model:").grid(row=1, column=0, sticky="w")
+        ctk.CTkEntry(self.cloud_bedrock_row, textvariable=self.cloud_model_var, width=200).grid(row=1, column=1, sticky="w", padx=(5, 10))
 
         # Action buttons
         action_row = ctk.CTkFrame(card)
@@ -206,7 +234,15 @@ class SettingsWindow(ctk.CTkToplevel):
         )
         self.verify_ssl_checkbox.grid(row=11, column=0, padx=15, pady=(0, 15), sticky="w")
 
-        self.cloud_row = cloud_row
+        current_provider = CLOUD_CONFIG.get("provider", "openai")
+        if current_provider == "bedrock":
+            self.cloud_type_dropdown.set("AWS Bedrock")
+            self.cloud_type_var.set("bedrock")
+        else:
+            self.cloud_type_dropdown.set("OpenAI Compatible")
+            self.cloud_type_var.set("openai")
+
+        self.cloud_type_dropdown.grid_remove()
         self.update_provider_ui()
         self.update_provider_status()
 
@@ -224,19 +260,27 @@ class SettingsWindow(ctk.CTkToplevel):
         self.update_provider_ui()
         self.update_provider_status()
 
+    def on_cloud_type_changed(self, choice):
+        mapping = {"OpenAI Compatible": "openai", "AWS Bedrock": "bedrock"}
+        self.cloud_type_var.set(mapping.get(choice, "openai"))
+        self._show_cloud_sub_row()
+
     def update_provider_ui(self):
         if self.provider_var.get() == "cloud":
-            self.cloud_row.grid()
-            self.host_row.grid_remove()
+            self.provider_select_label.configure(text="Cloud Type:")
             self.provider_dropdown.grid_remove()
-            self.cloud_endpoint_entry.grid()
+            self.cloud_type_dropdown.grid()
+            self.host_row.grid_remove()
             self.model_entry.grid_remove()
             self.model_dropdown.grid_remove()
             self.refresh_models_btn.pack_forget()
+            self._show_cloud_sub_row()
         else:
-            self.cloud_row.grid_remove()
+            self.provider_select_label.configure(text="Provider:")
+            self.cloud_type_dropdown.grid_remove()
+            self.cloud_openai_row.grid_remove()
+            self.cloud_bedrock_row.grid_remove()
             self.host_row.grid()
-            self.cloud_endpoint_entry.grid_remove()
             self.provider_dropdown.grid()
             self.model_entry.grid()
             self.model_dropdown.grid()
@@ -244,6 +288,14 @@ class SettingsWindow(ctk.CTkToplevel):
             self.model_entry.delete(0, "end")
             self.model_entry.insert(0, config._config.get("ollama_model") or "llama3.2")
         self.update_provider_dropdown()
+
+    def _show_cloud_sub_row(self):
+        if self.cloud_type_var.get() == "bedrock":
+            self.cloud_openai_row.grid_remove()
+            self.cloud_bedrock_row.grid()
+        else:
+            self.cloud_bedrock_row.grid_remove()
+            self.cloud_openai_row.grid()
 
     def update_provider_dropdown(self):
         """Update provider dropdown (local mode only)."""
@@ -305,8 +357,10 @@ class SettingsWindow(ctk.CTkToplevel):
                     text=f"Model: {provider_info['model']}"
                 )
             else:
+                backend = provider_info['backend']
+                display = backend.title() if backend != "AWS Bedrock" else "AWS Bedrock"
                 self.provider_label.configure(
-                    text=f"Provider: {provider_info['backend'].title()} (Cloud)",
+                    text=f"Provider: {display} (Cloud)",
                     text_color="blue"
                 )
                 self.connection_details_label.configure(
@@ -508,20 +562,36 @@ class SettingsWindow(ctk.CTkToplevel):
         set_llm_provider_type(provider_type)
 
         if provider_type == "cloud":
-            api_key = self.cloud_api_key_var.get().strip()
-            model = self.cloud_model_var.get().strip()
-            endpoint = self.cloud_endpoint_var.get().strip()
-            if not endpoint:
-                self.model_status.configure(text="Error: API Endpoint URL required for cloud", text_color="red")
-                return
-            if not api_key:
-                self.model_status.configure(text="Error: API key required for cloud", text_color="red")
-                return
-            if not model:
-                self.model_status.configure(text="Error: Model required for cloud", text_color="red")
-                return
-            set_cloud_config("openai", endpoint, api_key, model)
-            self.model_status.configure(text=f"Saved (Cloud) - Endpoint: {endpoint} | Model: {model}", text_color="green")
+            if self.cloud_type_var.get() == "bedrock":
+                region = self.aws_region_var.get().strip()
+                api_key = self.bedrock_api_key_var.get().strip()
+                model = self.cloud_model_var.get().strip()
+                if not region:
+                    self.model_status.configure(text="Error: AWS region required", text_color="red")
+                    return
+                if not api_key:
+                    self.model_status.configure(text="Error: Bedrock API key required", text_color="red")
+                    return
+                if not model:
+                    self.model_status.configure(text="Error: Model required", text_color="red")
+                    return
+                set_bedrock_config(region, api_key, model)
+                self.model_status.configure(text=f"Saved (Bedrock) - Region: {region} | Model: {model}", text_color="green")
+            else:
+                api_key = self.cloud_api_key_var.get().strip()
+                model = self.cloud_model_var.get().strip()
+                endpoint = self.cloud_endpoint_var.get().strip()
+                if not endpoint:
+                    self.model_status.configure(text="Error: API Endpoint URL required for cloud", text_color="red")
+                    return
+                if not api_key:
+                    self.model_status.configure(text="Error: API key required for cloud", text_color="red")
+                    return
+                if not model:
+                    self.model_status.configure(text="Error: Model required for cloud", text_color="red")
+                    return
+                set_cloud_config("openai", endpoint, api_key, model)
+                self.model_status.configure(text=f"Saved (Cloud) - Endpoint: {endpoint} | Model: {model}", text_color="green")
         else:
             model = self.model_var.get().strip()
             if not model:
@@ -559,33 +629,61 @@ class SettingsWindow(ctk.CTkToplevel):
         from llm_providers import LLMClient, LocalLLMProvider, CloudLLMProvider, LLMProviderError, LOCAL_PROVIDERS
 
         if provider_type == "cloud":
-            api_key = self.cloud_api_key_var.get().strip()
-            model = self.cloud_model_var.get().strip()
-            endpoint = self.cloud_endpoint_var.get().strip()
+            if self.cloud_type_var.get() == "bedrock":
+                region = self.aws_region_var.get().strip()
+                api_key = self.bedrock_api_key_var.get().strip()
+                model = self.cloud_model_var.get().strip()
 
-            if not endpoint:
-                self.model_status.configure(text="Error: API Endpoint URL required for cloud", text_color="red")
-                self.update_provider_status()
-                self.test_model_btn.configure(state="normal")
-                return
-            if not api_key:
-                self.model_status.configure(text="Error: API key required for cloud", text_color="red")
-                self.update_provider_status()
-                self.test_model_btn.configure(state="normal")
-                return
-            if not model:
-                self.model_status.configure(text="Error: Model required for cloud", text_color="red")
-                self.update_provider_status()
-                self.test_model_btn.configure(state="normal")
-                return
+                if not region:
+                    self.model_status.configure(text="Error: AWS region required", text_color="red")
+                    self.update_provider_status()
+                    self.test_model_btn.configure(state="normal")
+                    return
+                if not api_key:
+                    self.model_status.configure(text="Error: Bedrock API key required", text_color="red")
+                    self.update_provider_status()
+                    self.test_model_btn.configure(state="normal")
+                    return
+                if not model:
+                    self.model_status.configure(text="Error: Model required", text_color="red")
+                    self.update_provider_status()
+                    self.test_model_btn.configure(state="normal")
+                    return
 
-            cloud_config = {
-                "provider": "openai",
-                "endpoint": endpoint,
-                "api_key": api_key,
-                "model": model,
-                "verify": config.VERIFY_SSL,
-            }
+                cloud_config = {
+                    "provider": "bedrock",
+                    "api_key": api_key,
+                    "aws_region": region,
+                    "model": model,
+                }
+            else:
+                api_key = self.cloud_api_key_var.get().strip()
+                model = self.cloud_model_var.get().strip()
+                endpoint = self.cloud_endpoint_var.get().strip()
+
+                if not endpoint:
+                    self.model_status.configure(text="Error: API Endpoint URL required for cloud", text_color="red")
+                    self.update_provider_status()
+                    self.test_model_btn.configure(state="normal")
+                    return
+                if not api_key:
+                    self.model_status.configure(text="Error: API key required for cloud", text_color="red")
+                    self.update_provider_status()
+                    self.test_model_btn.configure(state="normal")
+                    return
+                if not model:
+                    self.model_status.configure(text="Error: Model required for cloud", text_color="red")
+                    self.update_provider_status()
+                    self.test_model_btn.configure(state="normal")
+                    return
+
+                cloud_config = {
+                    "provider": "openai",
+                    "endpoint": endpoint,
+                    "api_key": api_key,
+                    "model": model,
+                    "verify": config.VERIFY_SSL,
+                }
             provider = CloudLLMProvider(cloud_config)
         else:
             model = self.model_var.get().strip()

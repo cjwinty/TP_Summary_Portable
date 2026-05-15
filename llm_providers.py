@@ -1,10 +1,10 @@
+import json
 import logging
-import requests
 import threading
 import urllib3
-from datetime import datetime
-from abc import ABC, abstractmethod
+import requests
 from typing import Optional, Dict, Any, Literal
+from abc import ABC, abstractmethod
 import config
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -209,6 +209,7 @@ class CloudLLMProvider(BaseLLMProvider):
         self._api_key = config.get("api_key", "")
         self._endpoint = config.get("endpoint", "")
         self._verify = config.get("verify", True)
+        self._aws_region = config.get("aws_region", "us-east-1")
 
     @property
     def provider_type(self) -> ProviderType:
@@ -216,6 +217,13 @@ class CloudLLMProvider(BaseLLMProvider):
 
     def get_provider_info(self) -> dict:
         """Return provider details for UI display."""
+        if self._provider_name == "bedrock":
+            return {
+                "type": "cloud",
+                "backend": "AWS Bedrock",
+                "endpoint": self._get_bedrock_endpoint(),
+                "model": self._model,
+            }
         return {
             "type": "cloud",
             "backend": self._provider_name,
@@ -230,9 +238,14 @@ class CloudLLMProvider(BaseLLMProvider):
         elif self._provider_name == "anthropic":
             headers["x-api-key"] = self._api_key
             headers["anthropic-version"] = "2023-06-01"
+        elif self._provider_name == "bedrock":
+            headers["Authorization"] = f"Bearer {self._api_key}"
         return headers
 
     def generate(self, prompt: str, temperature: float = 0.3, max_tokens: Optional[int] = None, **kwargs) -> str:
+        if self._provider_name == "bedrock":
+            return self._generate_bedrock(prompt, temperature, max_tokens)
+
         if not self._api_key:
             raise LLMProviderError("API key not configured", "cloud")
         if not self._endpoint:
@@ -280,7 +293,58 @@ class CloudLLMProvider(BaseLLMProvider):
         except Exception as e:
             raise LLMProviderError(f"Error: {str(e)}", "cloud")
 
+    def _get_bedrock_endpoint(self) -> str:
+        return f"https://bedrock-runtime.{self._aws_region}.amazonaws.com/model/{self._model}/converse"
+
+    def _generate_bedrock(self, prompt: str, temperature: float = 0.3, max_tokens: Optional[int] = None) -> str:
+        if not self._api_key:
+            raise LLMProviderError("Bedrock API key not configured", "bedrock")
+        if not self._model:
+            raise LLMProviderError("Model not configured", "bedrock")
+
+        payload = {
+            "messages": [{"role": "user", "content": [{"text": prompt}]}],
+            "inferenceConfig": {"maxTokens": max_tokens or 4000, "temperature": temperature},
+        }
+        endpoint = self._get_bedrock_endpoint()
+
+        try:
+            response = requests.post(
+                endpoint,
+                headers=self._get_headers(),
+                json=payload,
+                timeout=self._timeout,
+            )
+            response.raise_for_status()
+            data = response.json()
+            text_blocks = data.get("output", {}).get("message", {}).get("content", [])
+            if text_blocks:
+                return text_blocks[0].get("text", "").strip()
+            return ""
+        except requests.exceptions.HTTPError as e:
+            detail = ""
+            try:
+                body_data = e.response.json()
+                detail = body_data.get("message", "")
+            except Exception:
+                detail = e.response.text[:200] if e.response.text else ""
+            msg = f"API error: {e.response.status_code}"
+            if detail:
+                msg += f" - {detail}"
+            raise LLMProviderError(msg, "bedrock")
+        except Exception as e:
+            raise LLMProviderError(f"Error: {str(e)}", "bedrock")
+
     def test_connection(self) -> tuple[bool, str]:
+        if self._provider_name == "bedrock":
+            if not self._api_key:
+                return False, "Bedrock API key not configured"
+            try:
+                result = self.generate("Say 'OK'", max_tokens=10)
+                return True, f"Connected to AWS Bedrock ({self._aws_region})"
+            except Exception as e:
+                return False, str(e)
+
         if not self._api_key:
             return False, "API key not configured"
         try:
