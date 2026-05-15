@@ -84,7 +84,7 @@
  [],
  False,
  False,
- 1778758803,
+ 1778842969,
  [('runw.exe',
    'E:\\TP Summary - '
    'Portable\\.venv\\Lib\\site-packages\\PyInstaller\\bootloader\\Windows-64bit-intel\\runw.exe',
