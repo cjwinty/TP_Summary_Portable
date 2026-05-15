@@ -145,19 +145,18 @@ def set_local_host(host: str):
 
 
 def set_cloud_config(provider: str, endpoint: str, api_key: str, model: str):
-    global CLOUD_CONFIG
     _config["llm_cloud_provider"] = provider
     _config["llm_cloud_endpoint"] = endpoint
     _config["llm_cloud_model"] = model
     save_user_config(_config)
     _secure_config["llm_api_key"] = api_key
     save_secure_config(_secure_config)
-    CLOUD_CONFIG = {
+    CLOUD_CONFIG.update({
         "provider": provider,
         "endpoint": endpoint,
         "api_key": _secure_config.get("llm_api_key", ""),
         "model": model,
-    }
+    })
 
 
 def set_prompt_logging_enabled(enabled: bool):

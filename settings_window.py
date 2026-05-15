@@ -1,5 +1,6 @@
 import customtkinter as ctk
 from tkinter import messagebox
+from threading import Thread
 
 import config
 from config import set_ollama_model, set_llm_provider_type, set_cloud_config, set_local_provider, set_local_host, LLM_PROVIDER_TYPE, CLOUD_CONFIG, LOCAL_LLM_HOST
@@ -553,77 +554,78 @@ class SettingsWindow(ctk.CTkToplevel):
         self.test_model_btn.configure(state="disabled")
         self.model_status.configure(text="Testing...", text_color="gray")
 
+        from llm_providers import LLMClient, LocalLLMProvider, CloudLLMProvider, LLMProviderError, LOCAL_PROVIDERS
+
+        if provider_type == "cloud":
+            api_key = self.cloud_api_key_var.get().strip()
+            model = self.cloud_model_var.get().strip()
+            endpoint = self.cloud_endpoint_var.get().strip()
+
+            if not endpoint:
+                self.model_status.configure(text="Error: API Endpoint URL required for cloud", text_color="red")
+                self.update_provider_status()
+                self.test_model_btn.configure(state="normal")
+                return
+            if not api_key:
+                self.model_status.configure(text="Error: API key required for cloud", text_color="red")
+                self.update_provider_status()
+                self.test_model_btn.configure(state="normal")
+                return
+            if not model:
+                self.model_status.configure(text="Error: Model required for cloud", text_color="red")
+                self.update_provider_status()
+                self.test_model_btn.configure(state="normal")
+                return
+
+            cloud_config = {
+                "provider": "openai",
+                "endpoint": endpoint,
+                "api_key": api_key,
+                "model": model,
+                "verify": config.VERIFY_SSL,
+            }
+            provider = CloudLLMProvider(cloud_config)
+        else:
+            model = self.model_var.get().strip()
+            host = self.host_var.get().strip()
+            local_provider = self.provider_dropdown.get()
+
+            if not model:
+                self.model_status.configure(text="Error: Model required for local", text_color="red")
+                self.update_provider_status()
+                self.test_model_btn.configure(state="normal")
+                return
+            if not host:
+                self.model_status.configure(text="Error: Host/IP required for local", text_color="red")
+                self.update_provider_status()
+                self.test_model_btn.configure(state="normal")
+                return
+
+            local_provider_config = LOCAL_PROVIDERS.get(local_provider, LOCAL_PROVIDERS["Ollama"])
+            local_config = {
+                "host": host,
+                "port": local_provider_config["port"],
+                "model": model,
+                "timeout": 120,
+            }
+            provider = LocalLLMProvider(local_config)
+
+        Thread(target=self._test_model_thread, args=(provider,), daemon=True).start()
+
+    def _test_model_thread(self, provider):
         try:
-            from llm_providers import LLMClient, LocalLLMProvider, CloudLLMProvider, LLMProviderError, LOCAL_PROVIDERS
-
-            if provider_type == "cloud":
-                # Test cloud provider with CURRENT UI values
-                api_key = self.cloud_api_key_var.get().strip()
-                model = self.cloud_model_var.get().strip()
-                endpoint = self.cloud_endpoint_var.get().strip()
-
-                if not endpoint:
-                    self.model_status.configure(text="Error: API Endpoint URL required for cloud", text_color="red")
-                    self.update_provider_status()
-                    return
-                if not api_key:
-                    self.model_status.configure(text="Error: API key required for cloud", text_color="red")
-                    self.update_provider_status()
-                    return
-                if not model:
-                    self.model_status.configure(text="Error: Model required for cloud", text_color="red")
-                    self.update_provider_status()
-                    return
-
-                cloud_config = {
-                    "provider": "openai",
-                    "endpoint": endpoint,
-                    "api_key": api_key,
-                    "model": model,
-                    "verify": config.VERIFY_SSL,
-                }
-                provider = CloudLLMProvider(cloud_config)
-            else:
-                # Test local provider with CURRENT UI values
-                model = self.model_var.get().strip()
-                host = self.host_var.get().strip()
-                local_provider = self.provider_dropdown.get()
-
-                if not model:
-                    self.model_status.configure(text="Error: Model required for local", text_color="red")
-                    self.update_provider_status()
-                    return
-                if not host:
-                    self.model_status.configure(text="Error: Host/IP required for local", text_color="red")
-                    self.update_provider_status()
-                    return
-
-                local_provider_config = LOCAL_PROVIDERS.get(local_provider, LOCAL_PROVIDERS["Ollama"])
-                local_config = {
-                    "host": host,
-                    "port": local_provider_config["port"],
-                    "model": model,
-                    "timeout": 120,
-                }
-                provider = LocalLLMProvider(local_config)
-
-            # Test the provider directly WITHOUT setting it on LLMClient
             success, message = provider.test_connection()
-
-            if success:
-                self.model_status.configure(text=message, text_color="green")
-            else:
-                self.model_status.configure(text=message, text_color="red")
-            self.update_provider_status()
-
-        except LLMProviderError as e:
-            self.model_status.configure(text=f"Error: {str(e)[:50]}", text_color="red")
-            self.update_provider_status()
+            self.after(0, lambda: self._test_model_done(success, message))
         except Exception as e:
-            self.model_status.configure(text=f"Connection failed: {str(e)[:50]}", text_color="red")
-            self.update_provider_status()
-        finally:
-            self.test_model_btn.configure(state="normal")
+            self.after(0, lambda: self._test_model_done(False, str(e)))
+
+    def _test_model_done(self, success, message):
+        if success:
+            self.model_status.configure(text=message, text_color="green")
+        else:
+            self.model_status.configure(text=message, text_color="red")
+        self.update_provider_status()
+        self.test_model_btn.configure(state="normal")
 
     def save_prompt_changes(self):
         if not hasattr(self, 'selected_prompt'):
