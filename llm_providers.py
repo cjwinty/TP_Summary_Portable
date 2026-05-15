@@ -267,7 +267,16 @@ class CloudLLMProvider(BaseLLMProvider):
                 return data["choices"][0]["message"]["content"].strip()
             return ""
         except requests.exceptions.HTTPError as e:
-            raise LLMProviderError(f"API error: {e.response.status_code}", "openai")
+            detail = ""
+            try:
+                body = e.response.json()
+                detail = body.get("error", {}).get("message", "")
+            except Exception:
+                detail = e.response.text[:200] if e.response.text else ""
+            msg = f"API error: {e.response.status_code}"
+            if detail:
+                msg += f" - {detail}"
+            raise LLMProviderError(msg, "openai")
         except Exception as e:
             raise LLMProviderError(f"Error: {str(e)}", "cloud")
 
