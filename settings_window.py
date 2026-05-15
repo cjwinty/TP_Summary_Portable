@@ -194,7 +194,16 @@ class SettingsWindow(ctk.CTkToplevel):
             variable=self.prompt_log_var,
             command=self._on_prompt_log_toggle
         )
-        self.prompt_log_checkbox.grid(row=9, column=0, padx=15, pady=(5, 15), sticky="w")
+        self.prompt_log_checkbox.grid(row=9, column=0, padx=15, pady=(5, 5), sticky="w")
+
+        self.verify_ssl_var = ctk.BooleanVar(value=config.VERIFY_SSL)
+        self.verify_ssl_checkbox = ctk.CTkCheckBox(
+            card,
+            text="Disable SSL verification (self-signed certificates)",
+            variable=self.verify_ssl_var,
+            command=self._on_verify_ssl_toggle
+        )
+        self.verify_ssl_checkbox.grid(row=10, column=0, padx=15, pady=(0, 15), sticky="w")
 
         self.cloud_row = cloud_row
         self.update_provider_ui()
@@ -202,6 +211,9 @@ class SettingsWindow(ctk.CTkToplevel):
 
     def _on_prompt_log_toggle(self):
         config.set_prompt_logging_enabled(self.prompt_log_var.get())
+
+    def _on_verify_ssl_toggle(self):
+        config.set_verify_ssl(self.verify_ssl_var.get())
         self.model_status.configure(
             text=f"Prompt logging {'enabled' if self.prompt_log_var.get() else 'disabled'}",
             text_color="gray"
@@ -568,6 +580,7 @@ class SettingsWindow(ctk.CTkToplevel):
                     "endpoint": endpoint,
                     "api_key": api_key,
                     "model": model,
+                    "verify": config.VERIFY_SSL,
                 }
                 provider = CloudLLMProvider(cloud_config)
             else:

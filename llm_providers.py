@@ -205,6 +205,7 @@ class CloudLLMProvider(BaseLLMProvider):
         self._provider_name = config.get("provider", "generic")
         self._api_key = config.get("api_key", "")
         self._endpoint = config.get("endpoint", "")
+        self._verify = config.get("verify", True)
 
     @property
     def provider_type(self) -> ProviderType:
@@ -254,7 +255,8 @@ class CloudLLMProvider(BaseLLMProvider):
                 self._endpoint,
                 headers=self._get_headers(),
                 json=payload,
-                timeout=self._timeout
+                timeout=self._timeout,
+                verify=self._verify
             )
             response.raise_for_status()
             data = response.json()

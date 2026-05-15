@@ -113,6 +113,8 @@ CLOUD_CONFIG = {
 PROMPT_LOG_FILE = os.path.join(get_base_dir(), "tp_prompt_log.txt")
 PROMPT_LOGGING_ENABLED = _config.get("prompt_logging_enabled", False)
 
+VERIFY_SSL = _config.get("verify_ssl", True)
+
 
 def set_ollama_model(model_name):
     global OLLAMA_MODEL
@@ -165,6 +167,13 @@ def set_prompt_logging_enabled(enabled: bool):
     save_user_config(_config)
 
 
+def set_verify_ssl(enabled: bool):
+    global VERIFY_SSL
+    VERIFY_SSL = enabled
+    _config["verify_ssl"] = enabled
+    save_user_config(_config)
+
+
 def initialize_llm():
     from llm_providers import LLMClient, LocalLLMProvider, CloudLLMProvider, LLMProviderError, LOCAL_PROVIDERS
 
@@ -180,6 +189,7 @@ def initialize_llm():
                 "endpoint": _config.get("llm_cloud_endpoint", "https://api.openai.com/v1/chat/completions"),
                 "api_key": _secure_config.get("llm_api_key", ""),
                 "model": _config.get("llm_cloud_model", "gpt-4"),
+                "verify": VERIFY_SSL,
             }
             if not cloud_config.get("api_key"):
                 raise LLMProviderError("Cloud LLM selected but API key not configured", "cloud")
