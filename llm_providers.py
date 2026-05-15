@@ -1,10 +1,13 @@
 import logging
 import requests
 import threading
+import urllib3
 from datetime import datetime
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, Literal
 import config
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 ProviderType = Literal["local", "cloud"]
 

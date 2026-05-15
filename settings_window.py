@@ -196,7 +196,7 @@ class SettingsWindow(ctk.CTkToplevel):
         )
         self.prompt_log_checkbox.grid(row=9, column=0, padx=15, pady=(5, 5), sticky="w")
 
-        self.verify_ssl_var = ctk.BooleanVar(value=config.VERIFY_SSL)
+        self.verify_ssl_var = ctk.BooleanVar(value=not config.VERIFY_SSL)
         self.verify_ssl_checkbox = ctk.CTkCheckBox(
             card,
             text="Disable SSL verification (self-signed certificates)",
@@ -213,7 +213,7 @@ class SettingsWindow(ctk.CTkToplevel):
         config.set_prompt_logging_enabled(self.prompt_log_var.get())
 
     def _on_verify_ssl_toggle(self):
-        config.set_verify_ssl(self.verify_ssl_var.get())
+        config.set_verify_ssl(not self.verify_ssl_var.get())
         self.model_status.configure(
             text=f"Prompt logging {'enabled' if self.prompt_log_var.get() else 'disabled'}",
             text_color="gray"
