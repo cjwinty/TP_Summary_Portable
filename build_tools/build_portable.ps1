@@ -114,6 +114,7 @@ finally:
             throw "Smoke test failed: app exited with code $($process.ExitCode)"
         }
         Stop-Process -Id $process.Id -Force
+        $process.WaitForExit(5000)
     }
     finally {
         $env:PATH = $oldPath
