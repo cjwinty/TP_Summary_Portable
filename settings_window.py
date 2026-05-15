@@ -119,30 +119,15 @@ class SettingsWindow(ctk.CTkToplevel):
         self.model_entry = ctk.CTkEntry(card, textvariable=self.model_var, width=250)
         self.model_entry.grid(row=4, column=0, padx=15, pady=(0, 10), sticky="w")
 
-        self.save_model_btn = ctk.CTkButton(card, text="Save", command=self.save_model, width=80)
-        self.save_model_btn.grid(row=4, column=0, padx=(265, 5), pady=(0, 10), sticky="w")
-
-        self.test_model_btn = ctk.CTkButton(card, text="Test Connection", command=self.test_model, width=120)
-        self.test_model_btn.grid(row=4, column=0, padx=(355, 5), pady=(0, 10), sticky="w")
-
-        # Refresh models button
-        self.refresh_models_btn = ctk.CTkButton(
-            card,
-            text="Refresh Models",
-            command=self.refresh_models,
-            width=120
-        )
-        self.refresh_models_btn.grid(row=4, column=0, padx=(480, 5), pady=(0, 10), sticky="w")
-
         # Model dropdown for local providers
         self.model_dropdown = ctk.CTkComboBox(
             card,
             values=[],
             width=200,
-            state="readonly"
+            state="readonly",
+            command=self.on_model_selected
         )
         self.model_dropdown.grid(row=5, column=0, padx=15, pady=(0, 10), sticky="w")
-        self.model_dropdown.bind("<<ComboboxSelected>>", self.on_model_selected)
 
         cloud_row = ctk.CTkFrame(card)
         cloud_row.grid(row=6, column=0, padx=15, pady=(0, 10), sticky="w")
@@ -156,12 +141,27 @@ class SettingsWindow(ctk.CTkToplevel):
         self.cloud_model_var = ctk.StringVar(value=CLOUD_CONFIG.get("model", "gpt-4"))
         ctk.CTkEntry(cloud_row, textvariable=self.cloud_model_var, width=100).grid(row=0, column=3, padx=5, sticky="w")
 
+        # Action buttons
+        action_row = ctk.CTkFrame(card)
+        action_row.grid(row=7, column=0, padx=15, pady=(0, 10), sticky="w")
+
+        self.save_model_btn = ctk.CTkButton(action_row, text="Save", command=self.save_model, width=80)
+        self.save_model_btn.pack(side="left", padx=(0, 5))
+
+        self.test_model_btn = ctk.CTkButton(action_row, text="Test Connection", command=self.test_model, width=120)
+        self.test_model_btn.pack(side="left", padx=5)
+
+        self.refresh_models_btn = ctk.CTkButton(
+            action_row, text="Refresh Models", command=self.refresh_models, width=120
+        )
+        self.refresh_models_btn.pack(side="left", padx=5)
+
         self.model_status = ctk.CTkLabel(card, text="", text_color="gray", font=ctk.CTkFont(size=11))
-        self.model_status.grid(row=7, column=0, padx=15, pady=(0, 10), sticky="w")
+        self.model_status.grid(row=8, column=0, padx=15, pady=(0, 10), sticky="w")
 
         # Provider status display
         self.status_frame = ctk.CTkFrame(card, fg_color="transparent")
-        self.status_frame.grid(row=8, column=0, padx=15, pady=(5, 10), sticky="ew")
+        self.status_frame.grid(row=9, column=0, padx=15, pady=(5, 10), sticky="ew")
 
         self.provider_label = ctk.CTkLabel(
             self.status_frame,
@@ -195,7 +195,7 @@ class SettingsWindow(ctk.CTkToplevel):
             variable=self.prompt_log_var,
             command=self._on_prompt_log_toggle
         )
-        self.prompt_log_checkbox.grid(row=9, column=0, padx=15, pady=(5, 5), sticky="w")
+        self.prompt_log_checkbox.grid(row=10, column=0, padx=15, pady=(5, 5), sticky="w")
 
         self.verify_ssl_var = ctk.BooleanVar(value=not config.VERIFY_SSL)
         self.verify_ssl_checkbox = ctk.CTkCheckBox(
@@ -204,7 +204,7 @@ class SettingsWindow(ctk.CTkToplevel):
             variable=self.verify_ssl_var,
             command=self._on_verify_ssl_toggle
         )
-        self.verify_ssl_checkbox.grid(row=10, column=0, padx=15, pady=(0, 15), sticky="w")
+        self.verify_ssl_checkbox.grid(row=11, column=0, padx=15, pady=(0, 15), sticky="w")
 
         self.cloud_row = cloud_row
         self.update_provider_ui()
@@ -230,13 +230,17 @@ class SettingsWindow(ctk.CTkToplevel):
             self.host_row.grid_remove()
             self.provider_dropdown.grid_remove()
             self.cloud_endpoint_entry.grid()
-            self.model_entry.delete(0, "end")
-            self.model_entry.insert(0, config._config.get("llm_cloud_model", "gpt-4"))
+            self.model_entry.grid_remove()
+            self.model_dropdown.grid_remove()
+            self.refresh_models_btn.pack_forget()
         else:
             self.cloud_row.grid_remove()
             self.host_row.grid()
             self.cloud_endpoint_entry.grid_remove()
             self.provider_dropdown.grid()
+            self.model_entry.grid()
+            self.model_dropdown.grid()
+            self.refresh_models_btn.pack(side="left", padx=5)
             self.model_entry.delete(0, "end")
             self.model_entry.insert(0, config._config.get("ollama_model") or "llama3.2")
         self.update_provider_dropdown()
@@ -358,11 +362,9 @@ class SettingsWindow(ctk.CTkToplevel):
         except Exception as e:
             self.model_status.configure(text=f"Error: {str(e)[:50]}", text_color="red")
 
-    def on_model_selected(self, event=None):
-        """Handle model selection from dropdown."""
-        selected = self.model_dropdown.get()
-        if selected:
-            self.model_var.set(selected)
+    def on_model_selected(self, choice):
+        if choice:
+            self.model_var.set(choice)
 
     def prompt_section(self, parent):
         card = ctk.CTkFrame(parent, corner_radius=12)
