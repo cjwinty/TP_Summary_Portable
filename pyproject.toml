@@ -18,8 +18,21 @@ dependencies = [
 [project.gui-scripts]
 tp-query = "tp_query:main"
 
+[tool.setuptools]
+py-modules = [
+    "tp_query",
+    "base_app",
+    "api",
+    "config",
+    "database",
+    "analysis",
+    "llm_providers",
+    "windows",
+    "settings_window",
+    "chain_window",
+    "prompt_chain_db",
+    "prompt_chain_executor",
+]
+
 [tool.setuptools.packages.find]
-include = ["tp_query", "base_app", "api", "config", "database", "analysis",
-           "llm_providers", "windows", "settings_window", "chain_window",
-           "prompt_chain_db", "prompt_chain_executor",
-           "CTkScrollableDropdown", "CTkScrollableDropdown.*"]
+include = [ "CTkScrollableDropdown", "CTkScrollableDropdown.*"]
